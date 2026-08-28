@@ -7,15 +7,21 @@ from fpdf import FPDF
 import openpyxl
 from openpyxl.styles import Font, Alignment, Border, Side
 
+# ======================== МОСКОВСКОЕ ВРЕМЯ (ПРИБАВЛЯЕМ 3 ЧАСА) ========================
+
+def get_moscow_time():
+    """Возвращает текущее московское время (UTC+3)"""
+    return datetime.datetime.now() + datetime.timedelta(hours=3)
+
 # ======================== ШРИФТЫ ========================
 
 class PDF(FPDF):
     def __init__(self):
-        super().__init__()
+        super().__init__('P', 'mm', (80, 250))
         self.add_font('DejaVu', '', 'DejaVuSansCondensed.ttf', uni=True)
         self.add_font('DejaVu', 'B', 'DejaVuSansCondensed-Bold.ttf', uni=True)
 
-# ======================== НАСТРОЙКИ ИЗ EXCEL ========================
+# ======================== НАСТРОЙКИ ========================
 
 def load_settings():
     default_settings = {
@@ -35,9 +41,9 @@ def load_settings():
         "corr_account": "30101810145250000974",
         "recipient": "ИП Иванов И.И."
     }
-    
+
     settings = default_settings.copy()
-    
+
     try:
         if os.path.exists('settings.xlsx'):
             wb = openpyxl.load_workbook('settings.xlsx')
@@ -49,7 +55,6 @@ def load_settings():
                     settings[key] = value
             print("✅ Настройки загружены из settings.xlsx")
         else:
-            # Создаём шаблон settings.xlsx
             wb = openpyxl.Workbook()
             ws = wb.active
             ws.title = "Настройки"
@@ -65,13 +70,13 @@ def load_settings():
             ws.column_dimensions['A'].width = 25
             ws.column_dimensions['B'].width = 45
             wb.save('settings.xlsx')
-            print("📄 Создан шаблон settings.xlsx (заполните его)")
+            print("📄 Создан шаблон settings.xlsx")
     except Exception as e:
         print(f"⚠️ Ошибка загрузки settings.xlsx: {e}")
-    
+
     return settings
 
-# ======================== EXCEL КНИГА УЧЁТА ========================
+# ======================== EXCEL КНИГА ========================
 
 def init_excel():
     if not os.path.exists('book.xlsx'):
@@ -98,9 +103,10 @@ def add_to_excel(client_name, amount, receipt_number):
         init_excel()
         wb = openpyxl.load_workbook('book.xlsx')
         ws = wb.active
+        now = get_moscow_time()
         row_num = ws.max_row + 1
         ws.cell(row=row_num, column=1, value=row_num - 1)
-        ws.cell(row=row_num, column=2, value=datetime.datetime.now().strftime('%d.%m.%Y %H:%M'))
+        ws.cell(row=row_num, column=2, value=now.strftime('%d.%m.%Y %H:%M'))
         ws.cell(row=row_num, column=3, value=receipt_number)
         ws.cell(row=row_num, column=4, value=client_name)
         ws.cell(row=row_num, column=5, value=amount)
@@ -110,7 +116,7 @@ def add_to_excel(client_name, amount, receipt_number):
         wb.save('book.xlsx')
         print(f"📝 Добавлена запись: {client_name} | {amount} руб. | №{receipt_number}")
     except PermissionError:
-        print("⚠️ Ошибка: файл book.xlsx открыт в Excel! Закройте его и попробуйте снова.")
+        print("⚠️ Ошибка: файл book.xlsx открыт в Excel!")
         if os.path.exists('book.xlsx'):
             shutil.copy('book.xlsx', 'book_backup.xlsx')
             print("📋 Создана резервная копия book_backup.xlsx")
@@ -121,21 +127,22 @@ def add_to_excel(client_name, amount, receipt_number):
             headers = ["№ п/п", "Дата и время", "№ Квитанции", "Клиент", "доходы, руб", "Статус"]
             for col, header in enumerate(headers, 1):
                 ws.cell(row=1, column=col, value=header).font = Font(bold=True)
+            now = get_moscow_time()
             row_num = 2
             ws.cell(row=row_num, column=1, value=1)
-            ws.cell(row=row_num, column=2, value=datetime.datetime.now().strftime('%d.%m.%Y %H:%M'))
+            ws.cell(row=row_num, column=2, value=now.strftime('%d.%m.%Y %H:%M'))
             ws.cell(row=row_num, column=3, value=receipt_number)
             ws.cell(row=row_num, column=4, value=client_name)
             ws.cell(row=row_num, column=5, value=amount)
             ws.cell(row=row_num, column=6, value="Оплачено")
             wb.save('book_new.xlsx')
-            print("📋 Создан новый файл book_new.xlsx (закройте book.xlsx и переименуйте)")
+            print("📋 Создан новый файл book_new.xlsx")
         except:
-            print("❌ Не удалось сохранить Excel-файл. Проверьте права доступа к папке.")
+            print("❌ Не удалось сохранить Excel-файл.")
     except Exception as e:
         print(f"⚠️ Ошибка записи в Excel: {e}")
 
-# ======================== ЗАГРУЗКА КЛИЕНТОВ ИЗ EXCEL ========================
+# ======================== ЗАГРУЗКА КЛИЕНТОВ ========================
 
 def load_clients():
     clients = {}
@@ -153,7 +160,6 @@ def load_clients():
                         pass
             print(f"📂 Загружено {len(clients)} клиентов из clients.xlsx")
         else:
-            # Создаём шаблон clients.xlsx
             wb = openpyxl.Workbook()
             ws = wb.active
             ws.title = "Клиенты"
@@ -165,7 +171,7 @@ def load_clients():
             ws.column_dimensions['C'].width = 15
             ws.column_dimensions['D'].width = 20
             wb.save('clients.xlsx')
-            print("📄 Создан шаблон clients.xlsx (заполните его клиентами)")
+            print("📄 Создан шаблон clients.xlsx")
     except Exception as e:
         print(f"⚠️ Ошибка загрузки clients.xlsx: {e}")
     return clients
@@ -175,185 +181,148 @@ def load_clients():
 def generate_pdf(settings, client_name, amount, user_id):
     pdf = PDF()
     pdf.add_page()
-    pdf.set_left_margin(15)
-    pdf.set_right_margin(15)
-    
-    # Рамка вокруг чека
-    pdf.rect(10, 10, 190, 277)
-    
-    # ЛОГОТИП (если есть)
+    pdf.set_left_margin(5)
+    pdf.set_right_margin(5)
+
+    # Логотип
     if os.path.exists('logo.png'):
         try:
-            pdf.image('logo.png', x=80, y=15, w=50)
-            pdf.ln(25)
+            pdf.image('logo.png', x=30, y=5, w=20)
+            pdf.ln(14)
         except:
             pdf.ln(5)
     else:
         pdf.ln(5)
-    
-    # ВОДЯНОЙ ЗНАК "ОПЛАЧЕНО"
-    pdf.set_font('DejaVu', 'B', 50)
-    pdf.set_text_color(200, 200, 200)
-    pdf.rotate(45)
-    pdf.set_xy(40, 100)
-    pdf.cell(0, 0, "ОПЛАЧЕНО", align='C')
-    pdf.rotate(0)
-    pdf.set_text_color(0, 0, 0)
-    
-    # ВЕРХНЯЯ ЧАСТЬ
-    pdf.set_font('DejaVu', 'B', 14)
-    pdf.cell(0, 10, txt="═" * 52, ln=True, align='C')
-    pdf.set_font('DejaVu', 'B', 16)
-    pdf.cell(0, 12, txt="КАССОВЫЙ ЧЕК. ПРИХОД", ln=True, align='C')
-    pdf.set_font('DejaVu', 'B', 14)
-    pdf.cell(0, 10, txt="═" * 52, ln=True, align='C')
-    pdf.ln(3)
-    
-    # НОМЕР ЧЕКА
-    now = datetime.datetime.now()
-    receipt_number = f"{now.strftime('%d%m')}-{now.strftime('%H%M%S')}"
-    pdf.set_font('DejaVu', '', 11)
-    pdf.cell(0, 7, txt=f"Чек №: {receipt_number}", ln=True)
-    pdf.cell(0, 7, txt=f"{now.strftime('%d.%m.%Y %H:%M')}", ln=True)
-    pdf.ln(3)
-    
-    pdf.set_font('DejaVu', '', 9)
-    pdf.cell(0, 6, txt="─" * 52, ln=True, align='C')
-    pdf.ln(3)
-    
-    # ДАННЫЕ ИП
+
+    # Шапка
     pdf.set_font('DejaVu', 'B', 12)
-    pdf.cell(0, 8, txt=settings["company_name"], ln=True)
-    pdf.set_font('DejaVu', '', 11)
-    pdf.cell(0, 7, txt=f"ИНН: {settings['inn']}", ln=True)
+    pdf.cell(0, 5, txt="═" * 30, ln=True, align='C')
+    pdf.set_font('DejaVu', 'B', 14)
+    pdf.cell(0, 7, txt="КАССОВЫЙ ЧЕК", ln=True, align='C')
+    pdf.set_font('DejaVu', 'B', 12)
+    pdf.cell(0, 5, txt="═" * 30, ln=True, align='C')
+    pdf.ln(2)
+
+    # Номер чека
+    now = get_moscow_time()
+    receipt_number = f"{now.strftime('%d%m')}-{now.strftime('%H%M%S')}"
+    pdf.set_font('DejaVu', '', 9)
+    pdf.cell(0, 5, txt=f"Чек №: {receipt_number}", ln=True, align='C')
+    pdf.cell(0, 5, txt=f"{now.strftime('%d.%m.%Y %H:%M')}", ln=True, align='C')
+    pdf.ln(2)
+
+    pdf.set_font('DejaVu', '', 8)
+    pdf.cell(0, 4, txt="─" * 30, ln=True, align='C')
+    pdf.ln(2)
+
+    # Данные ИП
+    pdf.set_font('DejaVu', 'B', 10)
+    pdf.cell(0, 5, txt=settings["company_name"], ln=True, align='C')
+    pdf.set_font('DejaVu', '', 8)
+    pdf.cell(0, 4, txt=f"ИНН: {settings['inn']}", ln=True, align='C')
     if settings.get('ogrnip'):
-        pdf.cell(0, 7, txt=f"ОГРНИП: {settings['ogrnip']}", ln=True)
-    pdf.cell(0, 7, txt=settings["address"], ln=True)
+        pdf.cell(0, 4, txt=f"ОГРНИП: {settings['ogrnip']}", ln=True, align='C')
+    pdf.cell(0, 4, txt=settings["address"], ln=True, align='C')
     if settings.get('phone'):
-        pdf.cell(0, 7, txt=f"Тел.: {settings['phone']}", ln=True)
-    pdf.ln(3)
-    
+        pdf.cell(0, 4, txt=f"Тел.: {settings['phone']}", ln=True, align='C')
+    pdf.ln(2)
+
+    pdf.set_font('DejaVu', '', 8)
+    pdf.cell(0, 4, txt="─" * 30, ln=True, align='C')
+    pdf.ln(2)
+
+    # Таблица услуг
+    pdf.set_font('DejaVu', 'B', 8)
+    pdf.cell(40, 5, "Наименование", border=1, align='C')
+    pdf.cell(20, 5, "Цена", border=1, align='C')
+    pdf.cell(10, 5, "Кол", border=1, align='C')
+    pdf.ln()
+
+    pdf.set_font('DejaVu', '', 8)
+    pdf.cell(40, 5, settings['service_name'], border=1, align='L')
+    pdf.cell(20, 5, f"{amount:.2f}", border=1, align='R')
+    pdf.cell(10, 5, "1", border=1, align='C')
+    pdf.ln()
+    pdf.ln(2)
+
+    # Итоги
     pdf.set_font('DejaVu', '', 9)
-    pdf.cell(0, 6, txt="─" * 52, ln=True, align='C')
-    pdf.ln(3)
-    
-    # ТАБЛИЦА УСЛУГ
+    pdf.cell(50, 5, txt="СУММА БЕЗ НДС", border=0)
+    pdf.cell(20, 5, txt=f"{amount:.2f}", border=0, align='R')
+    pdf.ln()
     pdf.set_font('DejaVu', 'B', 10)
-    pdf.cell(70, 8, "Наименование", border=1, align='C')
-    pdf.cell(35, 8, "Цена за ед.", border=1, align='C')
-    pdf.cell(25, 8, "Кол.", border=1, align='C')
-    pdf.cell(40, 8, "Сумма", border=1, align='C')
+    pdf.cell(50, 6, txt="ИТОГО:", border=0)
+    pdf.cell(20, 6, txt=f"{amount:.2f}", border=0, align='R')
     pdf.ln()
-    
-    pdf.set_font('DejaVu', '', 10)
-    pdf.cell(70, 8, settings['service_name'], border=1)
-    pdf.cell(35, 8, f"{amount:.2f}", border=1, align='R')
-    pdf.cell(25, 8, "1", border=1, align='C')
-    pdf.cell(40, 8, f"{amount:.2f}", border=1, align='R')
-    pdf.ln()
+    pdf.set_font('DejaVu', '', 8)
+    pdf.cell(50, 4, txt="Безналичными", border=0)
+    pdf.cell(20, 4, txt=f"{amount:.2f}", border=0, align='R')
     pdf.ln(3)
-    
-    # ИТОГИ
-    pdf.set_font('DejaVu', '', 10)
-    pdf.cell(110, 7, txt="СУММА БЕЗ НДС", border=0)
-    pdf.cell(40, 7, txt=f"{amount:.2f}", border=0, align='R')
-    pdf.ln()
-    pdf.set_font('DejaVu', 'B', 11)
-    pdf.cell(110, 8, txt="ИТОГО:", border=0)
-    pdf.cell(40, 8, txt=f"{amount:.2f}", border=0, align='R')
-    pdf.ln()
-    pdf.set_font('DejaVu', '', 10)
-    pdf.cell(110, 7, txt="Безналичными", border=0)
-    pdf.cell(40, 7, txt=f"{amount:.2f}", border=0, align='R')
-    pdf.ln(6)
-    
-    pdf.set_font('DejaVu', '', 9)
-    pdf.cell(0, 6, txt="─" * 52, ln=True, align='C')
-    pdf.ln(3)
-    
-    # НАЛОГОВАЯ ИНФОРМАЦИЯ
-    pdf.set_font('DejaVu', '', 11)
-    pdf.cell(100, 7, txt="Признак расчета в «Интернет»", border=0)
-    pdf.cell(40, 7, txt="Да", border=0, align='R')
-    pdf.ln()
-    pdf.cell(100, 7, txt="Применяемая система", border=0)
-    pdf.cell(40, 7, txt=settings["tax_system"], border=0, align='R')
-    pdf.ln()
-    pdf.cell(100, 7, txt="налогообложения", border=0)
-    pdf.ln(6)
-    
-    pdf.set_font('DejaVu', '', 9)
-    pdf.cell(0, 6, txt="─" * 52, ln=True, align='C')
-    pdf.ln(3)
-    
-    # БАНКОВСКИЕ РЕКВИЗИТЫ
-    pdf.set_font('DejaVu', 'B', 10)
-    pdf.cell(0, 7, txt="БАНКОВСКИЕ РЕКВИЗИТЫ:", ln=True)
-    pdf.set_font('DejaVu', '', 9)
+
+    pdf.set_font('DejaVu', '', 8)
+    pdf.cell(0, 4, txt="─" * 30, ln=True, align='C')
+    pdf.ln(2)
+
+    # Налоговая информация
+    pdf.set_font('DejaVu', '', 8)
+    pdf.cell(0, 4, txt=f"Система: {settings['tax_system']}", ln=True, align='C')
+    pdf.ln(2)
+
+    pdf.set_font('DejaVu', '', 8)
+    pdf.cell(0, 4, txt="─" * 30, ln=True, align='C')
+    pdf.ln(2)
+
+    # Банковские реквизиты
+    pdf.set_font('DejaVu', 'B', 8)
+    pdf.cell(0, 4, txt="РЕКВИЗИТЫ:", ln=True, align='C')
+    pdf.set_font('DejaVu', '', 7)
     if settings.get('bank_name'):
-        pdf.cell(0, 6, txt=f"Банк: {settings['bank_name']}", ln=True)
+        pdf.cell(0, 3, txt=f"{settings['bank_name']}", ln=True, align='C')
     if settings.get('bik'):
-        pdf.cell(0, 6, txt=f"БИК: {settings['bik']}", ln=True)
+        pdf.cell(0, 3, txt=f"БИК: {settings['bik']}", ln=True, align='C')
     if settings.get('account_number'):
-        pdf.cell(0, 6, txt=f"Р/с: {settings['account_number']}", ln=True)
-    if settings.get('corr_account'):
-        pdf.cell(0, 6, txt=f"К/с: {settings['corr_account']}", ln=True)
+        pdf.cell(0, 3, txt=f"Сч: {settings['account_number']}", ln=True, align='C')
     if settings.get('recipient'):
-        pdf.cell(0, 6, txt=f"Получатель: {settings['recipient']}", ln=True)
-    pdf.ln(3)
-    
-    pdf.set_font('DejaVu', '', 9)
-    pdf.cell(0, 6, txt="─" * 52, ln=True, align='C')
-    pdf.ln(3)
-    
-    # КОНТАКТЫ
-    pdf.set_font('DejaVu', '', 10)
-    pdf.cell(0, 7, txt=f"Эл. почта: {settings['email_sender']}", ln=True)
-    pdf.ln(3)
-    
-    pdf.set_font('DejaVu', '', 9)
-    pdf.cell(0, 6, txt="─" * 52, ln=True, align='C')
-    pdf.ln(3)
-    
-    # QR-КОД (если есть)
-    if os.path.exists('qrcode.png'):
-        try:
-            pdf.image('qrcode.png', x=80, y=240, w=40)
-            pdf.ln(20)
-        except:
-            pdf.ln(5)
-    
+        pdf.cell(0, 3, txt=f"Получатель: {settings['recipient']}", ln=True, align='C')
+    pdf.ln(2)
+
+    pdf.set_font('DejaVu', '', 7)
+    pdf.cell(0, 4, txt="─" * 30, ln=True, align='C')
+    pdf.ln(2)
+
+    # ============================================================
+    # НИЖНЯЯ ЧАСТЬ — ВСЁ ПЛОТНО, QR НА 2 СМ НИЖЕ ПОДПИСИ
+    # ============================================================
+
+    # 1. EMAIL
+    pdf.set_font('DejaVu', '', 7)
+    pdf.cell(0, 4, txt=f"Email: {settings['email_sender']}", ln=True, align='C')
+
+    # 2. САЙТ (сразу после Email)
     if settings.get('website'):
-        pdf.set_font('DejaVu', '', 10)
-        pdf.cell(0, 7, txt=f"Сайт: {settings['website']}", ln=True, align='C')
-    pdf.ln(3)
-    
-    pdf.set_font('DejaVu', '', 9)
-    pdf.cell(0, 6, txt="─" * 52, ln=True, align='C')
-    pdf.ln(3)
-    
-    # НИЖНЯЯ ЧАСТЬ (СПАСИБО + ПОДПИСЬ)
-    pdf.set_font('DejaVu', 'B', 13)
-    pdf.cell(0, 10, txt=settings["thanks_text"], ln=True, align='C')
-    pdf.ln(3)
-    pdf.set_font('DejaVu', '', 9)
-    pdf.cell(0, 6, txt="Сайт ФНС: nalog.gov.ru", ln=True, align='C')
-    pdf.ln(5)
-    
-    # ПОДПИСЬ (из картинки или текстом)
+        pdf.cell(0, 4, txt=f"{settings['website']}", ln=True, align='C')
+
+    # 3. ПОДПИСЬ (сразу после сайта)
     if os.path.exists('signature.png'):
         try:
-            pdf.image('signature.png', x=45, y=255, w=120)
+            pdf.image('signature.png', x=15, y=pdf.get_y() + 2, w=50)
+            pdf.set_y(pdf.get_y() + 12)
         except:
-            pdf.set_font('DejaVu', '', 10)
-            pdf.cell(0, 7, txt="____________________", ln=True, align='C')
-            pdf.cell(0, 7, txt="(подпись ИП)                М.П.", ln=True, align='C')
+            pdf.set_font('DejaVu', '', 7)
+            pdf.cell(0, 4, txt="____________________", ln=True, align='C')
+            pdf.cell(0, 4, txt="(подпись ИП)", ln=True, align='C')
     else:
-        pdf.set_font('DejaVu', '', 10)
-        pdf.cell(0, 7, txt="____________________", ln=True, align='C')
-        pdf.cell(0, 7, txt="(подпись ИП)                М.П.", ln=True, align='C')
-    
-    # Сохраняем PDF
+        pdf.set_font('DejaVu', '', 7)
+        pdf.cell(0, 4, txt="____________________", ln=True, align='C')
+        pdf.cell(0, 4, txt="(подпись ИП)", ln=True, align='C')
+
+    # 4. QR-КОД (НА 2 СМ НИЖЕ ПОДПИСИ)
+    if os.path.exists('qrcode.png'):
+        try:
+            pdf.image('qrcode.png', x=30, y=pdf.get_y() + 22, w=20)
+        except:
+            pass
+
     filename = f"check_{user_id}_{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}.pdf"
     pdf.output(filename)
     return filename, receipt_number
@@ -392,12 +361,10 @@ async def handle_message(update, context):
             pdf_file, receipt_number = generate_pdf(settings, client_name, amount, user_id)
             add_to_excel(client_name, amount, receipt_number)
 
-            # Отправка чека вам
             with open(pdf_file, 'rb') as f:
                 await update.message.reply_document(document=f, filename=pdf_file)
             await update.message.reply_text(f"✅ Чек для {client_name} на {amount} руб. №{receipt_number}")
 
-            # Отправка клиенту
             clients = load_clients()
             client_id = clients.get(client_name.lower())
 
@@ -428,17 +395,15 @@ def main():
             TOKEN = f.read().strip()
     except:
         print("❌ token.txt не найден!")
-        input("Нажмите Enter...")
         return
 
     if not TOKEN:
         print("❌ Токен пуст!")
-        input("Нажмите Enter...")
         return
 
     init_excel()
-    load_settings()  # Создаст settings.xlsx если нет
-    load_clients()   # Создаст clients.xlsx если нет
+    load_settings()
+    load_clients()
 
     app = Application.builder().token(TOKEN).build()
     app.add_handler(MessageHandler(filters.TEXT, handle_message))
@@ -447,6 +412,8 @@ def main():
     print("📋 Книга учёта: book.xlsx")
     print("👥 Список клиентов: clients.xlsx")
     print("⚙️ Настройки: settings.xlsx")
+    print("🕒 Часовой пояс: Москва (UTC+3)")
+
     app.run_polling()
 
 if __name__ == '__main__':
