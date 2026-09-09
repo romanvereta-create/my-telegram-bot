@@ -2332,6 +2332,7 @@ document.getElementById('personal-bot-disconnect').onclick = () => runPersonalBo
 });
 
 document.getElementById('btn-app-settings').onclick = () => {
+    document.getElementById('settings-build-version').textContent = `TEMLI ${window.TEMLI_I18N?.VERSION || '—'}`;
     fillAppSettingsForm();
     loadPersonalBot();
     document.getElementById('app-settings-overlay').classList.remove('hidden');
